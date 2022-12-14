@@ -5,6 +5,57 @@ import uuid
 import argparse
 import requests
 from glob import glob
+from tqdm import tqdm
+from functools import partial
+from multiprocessing.pool import ThreadPool as Pool
+
+def process_single_file(
+    input_fn: str,
+    output_dir: str,
+    call_url: str,
+    params: dict,
+    headers: dict,
+    debug: bool=False
+) -> dict:
+    res = {'status': 0, 'message': "Success"}
+
+    with open(input_fn, "r") as f:
+        input_text = f.read()
+
+    body = [{
+        'text': input_text
+    }]
+
+    # Call the Azure API
+
+    request = requests.post(call_url, params=params, headers=headers, json=body)
+    response = request.json()
+    
+    if 'error' in response:
+        res['status'] = response['error']['code']
+        res['message'] = response['error']['message']
+        raise Exception(f"Error when processing {input_fn}: Code {res['status']}, {res['message']}")
+
+    # Ready for output
+
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir, exist_ok=True)  # To work with multiprocessing
+    base, ext = os.path.splitext(os.path.basename(file))
+
+    # Write the output per language
+
+    for translation in response[0]["translations"]:
+        lang = translation["to"]
+        translated_text = translation["text"]
+
+        out_fn = os.path.join(output_dir, f"{base}_{lang}{ext}")
+
+        with open(out_fn, "w") as f:
+            f.write(translated_text)
+
+        if debug:
+            print(f"Successfully written {out_fn}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Translate text from one language to another using Azure Cognitive Services")
@@ -14,6 +65,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--target", nargs="*", help="The target language(s) to translate to", default=["zh-Hans"])
     parser.add_argument("--azure_region", help="The Azure region to use", default="northeurope")
     parser.add_argument("--azure_endpoint", help="The Azure endpoint to use", default="https://api.cognitive.microsofttranslator.com")
+    parser.add_argument("--debug", action="store_true", help="Debug mode")
     args = parser.parse_args()
 
     # Get Azure credentials from environment variables
@@ -50,40 +102,31 @@ if __name__ == "__main__":
         print(f"The input {args.input} does not exist.")
         exit(2)
 
-    for file in files:
-        with open(file, "r") as f:
-            input_text = f.read()
+    if args.debug:
+        for file in tqdm(files, ascii=True, desc="Processing files"):
+            res = process_single_file(
+                file,
+                args.output,
+                call_url,
+                params,
+                headers,
+                args.debug
+            )
+    else:
+        with Pool() as p:
+            res = list(tqdm(p.imap_unordered(
+                partial(
+                    process_single_file, 
+                    output_dir=args.output,
+                    call_url=call_url,
+                    params=params,
+                    headers=headers
+                ), files), total=len(files), ascii=True, desc="Processing files"))
+        p.join()
 
-        body = [{
-            "text": input_text
-        }]
-
-        # Call the Azure API
-
-        request = requests.post(call_url, params=params, headers=headers, json=body)
-        response = request.json()
-        
-        if "error" in response:
-            print(f"Code: {response['error']['code']}, message: {response['error']['message']}")
-            exit(2)
-
-        # Ready for output
-
-        if not os.path.isdir(args.output):
-            os.makedirs(args.output)
-        base, ext = os.path.splitext(os.path.basename(file))
-
-        # Write the output per language
-
-        for translation in response[0]["translations"]:
-            lang = translation["to"]
-            translated_text = translation["text"]
-
-            out_fn = os.path.join(args.output, f"{base}_{lang}{ext}")
-
-            with open(out_fn, "w") as f:
-                f.write(translated_text)
-
-            print(f"Successfully written {out_fn}")
+        for item in res:
+            if res['status'] != 0:
+                print(f"Error: {res['message']}")
+                exit(2)
     
     exit(0)
