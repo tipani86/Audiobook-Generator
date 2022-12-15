@@ -47,5 +47,5 @@ if __name__ == "__main__":
         with open(out_fn, "w") as f:
             f.write(output)
 
-    print(f"Successfully parsed {len(chapters)} chapters for '{args.input}', output in '{args.output}' directory.")
+    print(f"Successfully parsed {len(chapters)} chapters for '{args.input}', outputs in '{args.output}' directory.")
     exit(0)

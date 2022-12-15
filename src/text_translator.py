@@ -34,7 +34,7 @@ def process_single_file(
     if 'error' in response:
         res['status'] = response['error']['code']
         res['message'] = response['error']['message']
-        raise Exception(f"Error when processing {input_fn}: Code {res['status']}, {res['message']}")
+        raise Exception(f"Error processing {input_fn}: Code {res['status']}, {res['message']}")
 
     # Ready for output
 
@@ -56,6 +56,8 @@ def process_single_file(
         if debug:
             print(f"Successfully written {out_fn}")
 
+    return res
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Translate text from one language to another using Azure Cognitive Services")
@@ -68,7 +70,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", help="Debug mode")
     args = parser.parse_args()
 
-    # Get Azure credentials from environment variables
+    # Get Azure credentials from arguments and environment variables
     
     if "RESOURCE_KEY" not in os.environ:
         print("Please set the RESOURCE_KEY environment variable to use this script.")
@@ -103,14 +105,17 @@ if __name__ == "__main__":
         exit(2)
 
     if args.debug:
+        res = []
         for file in tqdm(files, ascii=True, desc="Processing files"):
-            res = process_single_file(
-                file,
-                args.output,
-                call_url,
-                params,
-                headers,
-                args.debug
+            res.append(
+                process_single_file(
+                    file,
+                    args.output,
+                    call_url,
+                    params,
+                    headers,
+                    args.debug
+                )
             )
     else:
         with Pool() as p:
@@ -124,9 +129,12 @@ if __name__ == "__main__":
                 ), files), total=len(files), ascii=True, desc="Processing files"))
         p.join()
 
-        for item in res:
-            if res['status'] != 0:
-                print(f"Error: {res['message']}")
-                exit(2)
+    # Check results
+
+    for item in res:
+        if res['status'] != 0:
+            print(f"Error: {res['message']}")
+            exit(2)
     
+    print(f"Successfully translated {len(res)} files from '{args.input}', outputs in '{args.output}' directory.")
     exit(0)

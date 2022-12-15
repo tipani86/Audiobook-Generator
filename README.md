@@ -1,5 +1,5 @@
 # Audiobook-Generator
-Generate audiobooks from input text with optional translation in between. Using Azure Cognitive Services.
+Generate audiobooks from input text with optional translation in between. Using Azure Cognitive Services: Language and Speech.
 
 ## Azure Free Tier Limits
 
