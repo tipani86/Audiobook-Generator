@@ -9,13 +9,14 @@ from tqdm import tqdm
 from functools import partial
 from multiprocessing.pool import ThreadPool as Pool
 
+
 def process_single_file(
     input_fn: str,
     output_dir: str,
     call_url: str,
     params: dict,
     headers: dict,
-    debug: bool=False
+    debug: bool = False
 ) -> dict:
     res = {'status': 0, 'message': "Success"}
 
@@ -30,7 +31,7 @@ def process_single_file(
 
     request = requests.post(call_url, params=params, headers=headers, json=body)
     response = request.json()
-    
+
     if 'error' in response:
         res['status'] = response['error']['code']
         res['message'] = response['error']['message']
@@ -40,7 +41,7 @@ def process_single_file(
 
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir, exist_ok=True)  # To work with multiprocessing
-    base, ext = os.path.splitext(os.path.basename(file))
+    base, ext = os.path.splitext(os.path.basename(input_fn))
 
     # Write the output per language
 
@@ -62,16 +63,16 @@ def process_single_file(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Translate text from one language to another using Azure Cognitive Services")
     parser.add_argument("input", help="The input file or directory to translate")
-    parser.add_argument("-o", "--output", help="The output directory to write to", default="_output")
-    parser.add_argument("-s", "--source", help="The source language to translate from", default="en")
-    parser.add_argument("-t", "--target", nargs="*", help="The target language(s) to translate to", default=["zh-Hans"])
-    parser.add_argument("--azure_region", help="The Azure region to use", default="northeurope")
-    parser.add_argument("--azure_endpoint", help="The Azure endpoint to use", default="https://api.cognitive.microsofttranslator.com")
+    parser.add_argument("-o", "--output", help="The output directory to write to (default: _output)", default="_output")
+    parser.add_argument("-s", "--source", help="The source language to translate from (default: en)", default="en")
+    parser.add_argument("-t", "--target", nargs="*", help="The target language(s) to translate to (default: zh-Hans)", default=["zh-Hans"])
+    parser.add_argument("--azure_region", help="The Azure region to use (default: northeurope)", default="northeurope")
+    parser.add_argument("--azure_endpoint", help="The Azure endpoint to use (default: https://api.cognitive.microsofttranslator.com)", default="https://api.cognitive.microsofttranslator.com")
     parser.add_argument("--debug", action="store_true", help="Debug mode")
     args = parser.parse_args()
 
     # Get Azure credentials from arguments and environment variables
-    
+
     if "RESOURCE_KEY" not in os.environ:
         print("Please set the RESOURCE_KEY environment variable to use this script.")
         exit(2)
@@ -121,7 +122,7 @@ if __name__ == "__main__":
         with Pool() as p:
             res = list(tqdm(p.imap_unordered(
                 partial(
-                    process_single_file, 
+                    process_single_file,
                     output_dir=args.output,
                     call_url=call_url,
                     params=params,
@@ -135,6 +136,6 @@ if __name__ == "__main__":
         if res['status'] != 0:
             print(f"Error: {res['message']}")
             exit(2)
-    
+
     print(f"Successfully translated {len(res)} files from '{args.input}', outputs in '{args.output}' directory.")
     exit(0)
