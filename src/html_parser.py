@@ -7,9 +7,9 @@ from bs4 import BeautifulSoup
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parse an HTML file")
     parser.add_argument("input", help="The HTML file to parse")
-    parser.add_argument("-c", "--chapter-tag", help="The anchor/tag to identify chapters with", default="chapter")
-    parser.add_argument("-t", "--title-tag", help="The anchor/tag to identify titles with", default="h1")
-    parser.add_argument("-o", "--output", help="The output directory to write to", default="_output")
+    parser.add_argument("-c", "--chapter-tag", help="The anchor/tag to identify chapters with (default: 'chapter')", default="chapter")
+    parser.add_argument("-t", "--title-tag", help="The anchor/tag to identify titles with (default: h1)", default="h1")
+    parser.add_argument("-o", "--output", help="The output directory to write to (default: _output)", default="_output")
     args = parser.parse_args()
 
     if not os.path.isfile(args.input):

@@ -18,12 +18,13 @@ OUTPUT_AUDIO_FORMAT = "audio-48khz-192kbitrate-mono-mp3"
 THREADPOOL_TIMEOUT = 900
 N_DOWNLOAD_THREADS = 4
 
+
 def submit_single_file(
     input_fn: str,
     call_url: str,
     config: dict,
     headers: dict,
-    debug: bool=False
+    debug: bool = False
 ) -> dict:
     res = {'status': 0, 'message': "Success", 'job_id': None}
 
@@ -58,11 +59,12 @@ def submit_single_file(
     res['message'] = f"Error submitting {input_fn} to batch synthesis: {request.text}"
     raise Exception(f"Error processing {input_fn}: Code {res['status']}, {res['message']}")
 
+
 def check_job_status(
     job_id: str,
     call_url: str,
     headers: dict,
-    debug: bool=False
+    debug: bool = False
 ) -> dict:
     res = {'status': "", 'uri': None, 'input_fn': None}
 
@@ -83,19 +85,20 @@ def check_job_status(
     res['status'] = f"Error checking the status of job_id: {job_id}: {request.text}"
     return res
 
+
 def download_file(
     job_id: str,
     uri: str,
     input_fn: str,
     output_dir: str,
-    debug: bool=False
+    debug: bool = False
 ) -> dict:
     res = {'status': 0, 'message': "Success"}
 
     # Parse the output file extension from uri and form the output filename
 
     base, ext = os.path.splitext(os.path.basename(input_fn))
-    out_ext = os.path.splitext(uri.split("?",1)[0])[1]
+    out_ext = os.path.splitext(uri.split("?", 1)[0])[1]
     out_fn = os.path.join(output_dir, f"{base}_voice_synthesis{out_ext}")
 
     print(f"Downloading job {job_id} from {uri} to {out_fn}...")
@@ -112,7 +115,6 @@ def download_file(
         if not os.path.isdir(output_dir):
             os.makedirs(output_dir, exist_ok=True)  # To work with multiprocessing
 
-
         with open(out_fn, "wb") as f:
             f.write(response)
 
@@ -125,19 +127,20 @@ def download_file(
     res['message'] = f"Error downloading job {job_id} from {uri} to {out_fn}: {request.text}"
     return res
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create text-to-speech synthesis from text chapters using Azure Cognitive Services")
     parser.add_argument("input", help="The input file or directory to synthesize")
-    parser.add_argument("-o", "--output", help="The output directory to write to", default="_output")
-    parser.add_argument("--config", help="The path to voice configuration json", default="cfg/bingbing.json")
-    parser.add_argument("--azure_region", help="The Azure region to use", default="northeurope")
-    parser.add_argument("--azure_endpoint", help="The Azure endpoint to use", default="customvoice.api.speech.microsoft.com")
+    parser.add_argument("-o", "--output", help="The output directory to write to (default: _output)", default="_output")
+    parser.add_argument("--config", help="The path to voice configuration json (default: cfg/bingbing.json", default="cfg/bingbing.json")
+    parser.add_argument("--azure_region", help="The Azure region to use (default: northeurope)", default="northeurope")
+    parser.add_argument("--azure_endpoint", help="The Azure endpoint to use (default: customvoice.api.speech.microsoft.com)", default="customvoice.api.speech.microsoft.com")
     parser.add_argument("--debug", action="store_true", help="Debug mode")
     parser.add_argument("--list_only", action="store_true", help="Go straight to jobs listing and download mode")
     args = parser.parse_args()
 
     # Get Azure credentials from arguments and environment variables
-    
+
     if "RESOURCE_KEY" not in os.environ:
         print("Please set the RESOURCE_KEY environment variable to use this script.")
         exit(2)
@@ -164,7 +167,6 @@ if __name__ == "__main__":
         else:
             print(f"Error listing batch synthesis jobs: {request.text}")
             exit(2)
-        
 
     # Read the input file/directory
 
@@ -175,7 +177,7 @@ if __name__ == "__main__":
     else:
         print(f"The input {args.input} does not exist.")
         exit(2)
-    
+
     # Read the voice configuration file
 
     if not os.path.isfile(args.config):
@@ -203,7 +205,7 @@ if __name__ == "__main__":
         with Pool() as p:
             res = list(tqdm(p.imap_unordered(
                 partial(
-                    submit_single_file, 
+                    submit_single_file,
                     call_url=call_url,
                     config=config,
                     headers=headers
@@ -220,14 +222,14 @@ if __name__ == "__main__":
             failed_submissions.append(res['message'])
         else:
             successful_submissions[item['job_id']] = check_job_status(item['job_id'], call_url, headers)
-    
+
     # Display failed submissions, if any
 
     if len(failed_submissions) > 0:
         print(f"Warning! {len(failed_submissions)} failed submissions detected:")
         for item in failed_submissions:
             print(item)
-    
+
     # Start a loop to check the status of the successful submissions and download via the threadpool executor
 
     executor = ThreadPoolExecutor(N_DOWNLOAD_THREADS)
@@ -263,7 +265,7 @@ if __name__ == "__main__":
             # Break the loop if all jobs are successful
             if n_success_jobs == len(successful_submissions):
                 break
-            
+
             if args.debug:
                 print("")
 
@@ -280,7 +282,7 @@ if __name__ == "__main__":
     if len(download_task_res.not_done) > 0:
         print(f"Download task timed out after {THREADPOOL_TIMEOUT} seconds.")
         exit(2)
-    
+
     for task_res in download_task_res.done:
         res = task_res.result()
         if res['status'] != 0:
