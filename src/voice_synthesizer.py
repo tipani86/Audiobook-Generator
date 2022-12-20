@@ -232,6 +232,8 @@ if __name__ == "__main__":
 
     # Start a loop to check the status of the successful submissions and download via the threadpool executor
 
+    print(f"Successfully submitted {len(successful_submissions)} jobs, waiting for the batch job to complete (be patient, this may take a minute or two)...")
+
     executor = ThreadPoolExecutor(N_DOWNLOAD_THREADS)
 
     if len(successful_submissions) > 0:
