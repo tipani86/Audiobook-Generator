@@ -1,10 +1,14 @@
 # Create long-form text-to-speech synthesis from text chapters using Azure Cognitive Services
 
 import os
+import uuid
 import json
 import time
+import shutil
+import zipfile
 import requests
 import argparse
+import traceback
 from glob import glob
 from tqdm import tqdm
 from functools import partial
@@ -86,11 +90,47 @@ def check_job_status(
     return res
 
 
+def unzip_file(
+    zip_fn: str,
+    output_dir: str,
+    filter_ext: str = ".mp3",
+    debug: bool = False
+) -> dict:
+    res = {'status': 0, 'message': "Success"}
+
+    try:
+        # Unzip the file, filtering for the desired extension
+        with zipfile.ZipFile(zip_fn, 'r') as zip_ref:
+            i = 0
+            for file_info in zip_ref.infolist():
+                if file_info.filename.endswith(filter_ext):
+                    temp_dir = os.path.join(output_dir, str(uuid.uuid4()))
+                    out_fn = zip_fn.replace(".zip", f"{filter_ext}")
+                    if i > 0:
+                        out_fn = out_fn.replace(filter_ext, f"_{i}{filter_ext}")
+                    zip_ref.extract(file_info, temp_dir)
+                    shutil.move(os.path.join(temp_dir, file_info.filename), out_fn)
+                    shutil.rmtree(temp_dir)
+                    i += 1
+
+        # Remove the original zip file
+        os.remove(zip_fn)
+
+        if debug:
+            print(f"Successfully unzipped {zip_fn} to {output_dir}")
+    except:
+        res['status'] = 2
+        res['message'] = f"Error unzipping {zip_fn} to {output_dir}: {traceback.format_exc()}"
+
+    return res
+
+
 def download_file(
     job_id: str,
     uri: str,
     input_fn: str,
     output_dir: str,
+    skip_unzip: bool = False,
     debug: bool = False
 ) -> dict:
     res = {'status': 0, 'message': "Success"}
@@ -121,6 +161,11 @@ def download_file(
         if debug:
             print(f"Successfully downloaded job {job_id} to {out_fn}")
 
+        if not skip_unzip and out_ext == ".zip":
+            unzip_res = unzip_file(out_fn, output_dir, debug=debug)
+            if unzip_res['status'] != 0:
+                return unzip_res
+
         return res
 
     res['status'] = request.status_code
@@ -137,6 +182,7 @@ if __name__ == "__main__":
     parser.add_argument("--azure_endpoint", help="The Azure endpoint to use (default: customvoice.api.speech.microsoft.com)", default="customvoice.api.speech.microsoft.com")
     parser.add_argument("--debug", action="store_true", help="Debug mode")
     parser.add_argument("--list_only", action="store_true", help="Go straight to jobs listing and download mode")
+    parser.add_argument("--no_unzip", action="store_true", help="Do not unzip and rename downloaded files automatically")
     args = parser.parse_args()
 
     # Get Azure credentials from arguments and environment variables
@@ -217,7 +263,7 @@ if __name__ == "__main__":
     successful_submissions = {}
     failed_submissions = []
 
-    for item in res:
+    for item in tqdm(res, ascii=True, desc="Checking submission statuses"):
         if item['status'] != 0:
             failed_submissions.append(res['message'])
         else:
