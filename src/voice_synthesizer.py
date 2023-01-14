@@ -181,47 +181,51 @@ def process_single_file(
 ) -> dict:
     res = {'status': 0, 'message': "Success"}
 
-    # Read input file into a list of lines
+    try:
+        # Read input file into a list of lines
 
-    with open(input_fn, "r") as f:
-        lines = f.readlines()
+        with open(input_fn, "r") as f:
+            lines = f.readlines()
 
-    # Go through the lines and split them into larger chunks.
-    # Microsoft's own Azure Speech Studio cuts off after 3,000 characters, so we will
-    # add a new chunk at the line after 2,500 characters have been reached.
+        # Go through the lines and split them into larger chunks.
+        # Microsoft's own Azure Speech Studio cuts off after 3,000 characters, so we will
+        # add a new chunk at the line after 2,500 characters have been reached.
 
-    chunks = []
-    chunk = ""
-    for line in lines:
-        if len(chunk) + len(line) > 2500:
-            chunks.append(chunk)
-            chunk = ""
-        chunk += line
-    chunks.append(chunk)
+        chunks = []
+        chunk = ""
+        for line in lines:
+            if len(chunk) + len(line) > 2500:
+                chunks.append(chunk)
+                chunk = ""
+            chunk += line
+        chunks.append(chunk)
 
-    # Set up the synthesizer and template SSML
+        # Set up the synthesizer and template SSML
 
-    synthesizer = speechsdk.SpeechSynthesizer(speech_config=config['speech_config'], audio_config=None)
-    ssml_string = f"""
-    <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
-        <voice name="{config['voice'] if 'voice' in config else 'zh-CN-XiaoxiaoNeural'}">
-            <prosody rate="{config['rate'] if 'rate' in config else '100%'}" pitch="{config['pitch'] if 'pitch' in config else '0%'}">
-                [TEXT]
-            </prosody>
-        </voice>
-    </speak>
-    """
+        synthesizer = speechsdk.SpeechSynthesizer(speech_config=config['speech_config'], audio_config=None)
+        ssml_string = f"""
+        <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
+            <voice name="{config['voice'] if 'voice' in config else 'zh-CN-XiaoxiaoNeural'}">
+                <prosody rate="{config['rate'] if 'rate' in config else '100%'}" pitch="{config['pitch'] if 'pitch' in config else '0%'}">
+                    [TEXT]
+                </prosody>
+            </voice>
+        </speak>
+        """
 
-    # Synthesize voice for each chunk in memory, then join them as a single byte stream
-    stream = b""
-    for chunk in chunks:
-        ssml = ssml_string.replace("[TEXT]", chunk)
-        stream += synthesizer.speak_ssml_async(ssml).get().audio_data
-    out_fn = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(input_fn))[0]}_voice_synthesis.mp3")
+        # Synthesize voice for each chunk in memory, then join them as a single byte stream
+        stream = b""
+        for chunk in chunks:
+            ssml = ssml_string.replace("[TEXT]", chunk)
+            stream += synthesizer.speak_ssml_async(ssml).get().audio_data
+        out_fn = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(input_fn))[0]}_voice_synthesis.mp3")
 
-    # Save the stream to a file
-    with open(out_fn, "wb") as f:
-        f.write(stream)
+        # Save the stream to a file
+        with open(out_fn, "wb") as f:
+            f.write(stream)
+    except:
+        res['status'] = 2
+        res['message'] = f"Error processing {input_fn}: {traceback.format_exc()}"
 
     return res
 
@@ -424,6 +428,9 @@ if __name__ == "__main__":
                     ), files), total=len(files), ascii=True, desc="Processing files"))
             p.join()
 
-        pass
+        for item in res:
+            if item['status'] != 0:
+                print(res['message'])
+                exit(res['status'])
 
     exit(0)
