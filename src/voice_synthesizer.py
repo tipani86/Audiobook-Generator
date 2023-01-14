@@ -213,11 +213,10 @@ def process_single_file(
     # Set up the synthesizer and template SSML
 
     synthesizer = speechsdk.SpeechSynthesizer(speech_config=config['speech_config'], audio_config=None)
-
     ssml_string = f"""
     <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
-        <voice name="{config['voice']}">
-            <prosody rate="{config['rate']}" pitch="{config['pitch']}">
+        <voice name="{config['voice'] if 'voice' in config else 'zh-CN-XiaoxiaoNeural'}">
+            <prosody rate="{config['rate'] if 'rate' in config else '100%'}" pitch="{config['pitch'] if 'pitch' in config else '0%'}">
                 [TEXT]
             </prosody>
         </voice>
