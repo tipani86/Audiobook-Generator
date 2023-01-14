@@ -186,9 +186,9 @@ def process_single_file(
     with open(input_fn, "r") as f:
         lines = f.readlines()
 
-    # Go through the lines and save them into larger chunks.
+    # Go through the lines and split them into larger chunks.
     # Microsoft's own Azure Speech Studio cuts off after 3,000 characters, so we will
-    # split the text at the line after 2,500 characters have been reached.
+    # add a new chunk at the line after 2,500 characters have been reached.
 
     chunks = []
     chunk = ""
@@ -198,17 +198,6 @@ def process_single_file(
             chunk = ""
         chunk += line
     chunks.append(chunk)
-
-    # # Save the chunks to numbered temporary files based on input filename
-
-    # base, ext = os.path.splitext(os.path.basename(input_fn))
-    # if not os.path.isdir(output_dir):
-    #     os.makedirs(output_dir, exist_ok=True)
-
-    # for i, chunk in enumerate(chunks):
-    #     temp_fn = os.path.join(output_dir, f"{base}_{i}.txt")
-    #     with open(temp_fn, "w") as f:
-    #         f.write(chunk)
 
     # Set up the synthesizer and template SSML
 
