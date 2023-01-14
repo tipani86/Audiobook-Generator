@@ -73,11 +73,11 @@ if __name__ == "__main__":
 
     # Get Azure credentials from arguments and environment variables
 
-    if "RESOURCE_KEY" not in os.environ:
-        print("Please set the RESOURCE_KEY environment variable to use this script.")
+    if "TRANSLATOR_KEY" not in os.environ:
+        print("Please set the TRANSLATOR_KEY environment variable to use this script.")
         exit(2)
 
-    azure_key = os.getenv("RESOURCE_KEY")
+    azure_key = os.getenv("TRANSLATOR_KEY")
 
     azure_endpoint = args.azure_endpoint
     call_url = os.path.join(azure_endpoint, "translate")
@@ -133,8 +133,8 @@ if __name__ == "__main__":
     # Check results
 
     for item in res:
-        if res['status'] != 0:
-            print(f"Error: {res['message']}")
+        if item['status'] != 0:
+            print(f"Error: {item['message']}")
             exit(2)
 
     print(f"Successfully translated {len(res)} files from '{args.input}', outputs in '{args.output}' directory.")
