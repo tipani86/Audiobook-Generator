@@ -177,6 +177,7 @@ def download_file(
 def process_single_file(
     input_fn: str,
     output_dir: str,
+    input_type: str,
     config: dict
 ) -> dict:
     res = {'status': 0, 'message': "Success"}
@@ -187,37 +188,60 @@ def process_single_file(
         with open(input_fn, "r") as f:
             lines = f.readlines()
 
-        # Go through the lines and split them into larger chunks.
-        # Microsoft's own Azure Speech Studio cuts off after 3,000 characters, so we will
-        # add a new chunk at the line after 2,500 characters have been reached.
+        if input_type == "text":
 
-        chunks = []
-        chunk = ""
-        for line in lines:
-            if len(chunk) + len(line) > 2500:
-                chunks.append(chunk)
-                chunk = ""
-            chunk += line
-        chunks.append(chunk)
+            # Go through the lines and split them into larger chunks.
+            # Microsoft's own Azure Speech Studio cuts off after 3,000 characters, so we will
+            # add a new chunk at the line after 2,500 characters have been reached.
 
-        # Set up the synthesizer and template SSML
+            chunks = []
+            chunk = ""
+            for line in lines:
+                if "&" in line:
+                    res['status'] = 2
+                    res['message'] = f"Error processing {input_fn}: Character '&'g not allowed in text (line: {line})"
+                    return res
+                if len(chunk) + len(line) > 2500:
+                    chunks.append(chunk)
+                    chunk = ""
+                chunk += line
+            chunks.append(chunk)
 
-        synthesizer = speechsdk.SpeechSynthesizer(speech_config=config['speech_config'], audio_config=None)
-        ssml_string = f"""
-        <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
-            <voice name="{config['voice'] if 'voice' in config else 'zh-CN-XiaoxiaoNeural'}">
-                <prosody rate="{config['rate'] if 'rate' in config else '100%'}" pitch="{config['pitch'] if 'pitch' in config else '0%'}">
-                    [TEXT]
-                </prosody>
-            </voice>
-        </speak>
-        """
+            # Set up the synthesizer and template SSML
 
-        # Synthesize voice for each chunk in memory, then join them as a single byte stream
-        stream = b""
-        for chunk in chunks:
-            ssml = ssml_string.replace("[TEXT]", chunk)
-            stream += synthesizer.speak_ssml_async(ssml).get().audio_data
+            ssml_string = f"""
+            <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
+                <voice name="{config['voice'] if 'voice' in config else 'zh-CN-XiaoxiaoNeural'}">
+                    <prosody rate="{config['rate'] if 'rate' in config else 1.0}" pitch="{config['pitch'] if 'pitch' in config else '0%'}">
+                        [TEXT]
+                    </prosody>
+                </voice>
+            </speak>
+            """
+
+            # Synthesize voice for each chunk in memory, then join them as a single byte stream
+            stream = b""
+            for chunk in chunks:
+                ssml = ssml_string.replace("[TEXT]", chunk)
+                synthesizer = speechsdk.SpeechSynthesizer(speech_config=config['speech_config'], audio_config=None)  # Initialize a new synthesizer for each chunk
+                result_data = synthesizer.speak_ssml_async(ssml).get().audio_data
+                if len(result_data) > 0:
+                    stream += result_data
+                else:
+                    res['status'] = 2
+                    res['message'] = f"Error synthesizing voice for chunk: {chunk}"
+                    return res
+
+        elif input_type == "ssml":
+            stream = b""
+            synthesizer = speechsdk.SpeechSynthesizer(speech_config=config['speech_config'], audio_config=None)
+            text = "".join(lines)
+            stream += synthesizer.speak_ssml_async(text).get().audio_data
+
+        else:
+            res['status'] = 2
+            res['message'] = f"Unknown input type {input_type}"
+
         out_fn = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(input_fn))[0]}_voice_synthesis.mp3")
 
         # Save the stream to a file
@@ -235,12 +259,13 @@ if __name__ == "__main__":
     parser.add_argument("input", help="The input file or directory to synthesize")
     parser.add_argument("-o", "--output", help="The output directory to write to (default: _output)", default="_output")
     parser.add_argument("-v", "--voice_config", help="The path to voice configuration json (default: cfg/default.json", default="cfg/default.json")
-    parser.add_argument("--azure_region", help="The Azure region to use (default: northeurope)", default="northeurope")
+    parser.add_argument("--azure_region", help="The Azure region to use (default: westeurope)", default="westeurope")
     parser.add_argument("--azure_endpoint", help="The Azure endpoint to use (default: customvoice.api.speech.microsoft.com)", default="customvoice.api.speech.microsoft.com")
     parser.add_argument("--debug", action="store_true", help="Debug mode")
     parser.add_argument("--list_only", action="store_true", help="Go straight to jobs listing and download mode")
     parser.add_argument("--no_unzip", action="store_true", help="Do not unzip and rename downloaded files automatically")
     parser.add_argument("--batch_synthesis", action="store_true", help="Use asynchronous batch synthesis instead of realtime synthesis (your Azure Key must be Standard Paid Tier, not Free Tier)")
+    parser.add_argument("--input_type", choices=["text", "ssml"], help="The input type (default: text)", default="text")
     args = parser.parse_args()
 
     # Get Azure credentials from arguments and environment variables
@@ -415,6 +440,7 @@ if __name__ == "__main__":
                     process_single_file(
                         file,
                         args.output,
+                        args.input_type,
                         config
                     )
                 )
@@ -424,13 +450,14 @@ if __name__ == "__main__":
                     partial(
                         process_single_file,
                         output_dir=args.output,
+                        input_type=args.input_type,
                         config=config
                     ), files), total=len(files), ascii=True, desc="Processing files"))
             p.join()
 
         for item in res:
             if item['status'] != 0:
-                print(res['message'])
-                exit(res['status'])
+                print(item['message'])
+                exit(item['status'])
 
     exit(0)
